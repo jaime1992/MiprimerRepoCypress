@@ -1,0 +1,32 @@
+# Dependencias
+node_modules/
+
+# Cypress - archivos generados automáticamente
+cypress/videos/
+cypress/screenshots/
+cypress/reports/
+cypress/downloads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Claude Code settings
+.claude/
+
+# Variables de entorno y credenciales
+.env
+.env.local
+*.env
+
+# Scripts de administración n8n (no son parte del framework de testing)
+workflows/*.py
+workflows/*.bak
