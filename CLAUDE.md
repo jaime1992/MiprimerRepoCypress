@@ -214,3 +214,28 @@ Skills creadas en las últimas 3 semanas para este proyecto QA:
 - **Errores de validación en workflow n8n** → `/n8n-validation-expert`
 - **Usar herramientas MCP de n8n** → `/n8n-mcp-tools-expert`
 - **Notificaciones o chatbot por WhatsApp** → `/whatsapp-automation`
+
+---
+
+## Requisito operacional — n8n + email-server
+
+> **Error frecuente:** `The service refused the connection - perhaps it is offline`
+> Causa: el `email-server.js` no está corriendo cuando n8n intenta enviar el email.
+
+Todos los workflows que envían Gmail (WF-1.1, WF-1.2, WF-1.3, WF-1.4) dependen de **dos procesos** que deben estar activos al mismo tiempo:
+
+```bash
+# Terminal 1 — levantar n8n
+n8n start
+
+# Terminal 2 — levantar el servidor de email (desde la raíz del proyecto)
+cd C:\Automation\cypress\asistente-cypres-e2e-framework
+node email-server.js
+```
+
+| Proceso | Puerto | Qué hace |
+|---|---|---|
+| `n8n start` | `5678` | Orquestador de workflows |
+| `node email-server.js` | `3025` | Genera Excel/HTML y envía Gmail vía SMTP |
+
+**Regla:** si un nodo de tipo `Enviar Gmail` falla con "refused connection", lo primero es verificar que `email-server.js` esté corriendo en `localhost:3025` antes de revisar credenciales o configuración del nodo.
