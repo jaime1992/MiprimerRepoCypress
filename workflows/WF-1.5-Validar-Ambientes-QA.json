@@ -1,0 +1,201 @@
+{
+  "name": "WF-1.5 — Validar Ambientes QA y Reportar Estado de Salud",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "🏥 WF-1.5 — Health Check Ambientes QA\n\nTrigger: Manual (antes de iniciar jornada)\nPing: Dev, Staging, UAT → clinicabupasantiago.cl\n\n✅ Todo OK  → Gmail verde + WhatsApp OK\n🚨 Hay caídos → Bug Jira + Gmail rojo + WhatsApp alerta\n\n⚠️ Requiere email-server.js en localhost:3025",
+        "height": 160,
+        "width": 360
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [200, 120],
+      "id": "b2c3d4e5-0001-4bbb-9999-222222222201",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {},
+      "id": "b2c3d4e5-0002-4bbb-9999-222222222202",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ambientes = [\n  { nombre: 'Dev',     url: 'https://www.clinicabupasantiago.cl/', ambiente: 'dev' },\n  { nombre: 'Staging', url: 'https://www.clinicabupasantiago.cl/', ambiente: 'staging' },\n  { nombre: 'UAT',     url: 'https://www.clinicabupasantiago.cl/', ambiente: 'uat' },\n];\n\nconst resultados = [];\n\nfor (const amb of ambientes) {\n  try {\n    const resp = await $helpers.httpRequest({\n      method: 'GET',\n      url: amb.url,\n      returnFullResponse: true,\n      ignoreHttpStatusErrors: true,\n      timeout: 10000,\n    });\n    resultados.push({\n      ...amb,\n      statusCode: resp.statusCode,\n      status: resp.statusCode === 200 ? 'UP' : 'DOWN',\n      ok: resp.statusCode === 200,\n    });\n  } catch (err) {\n    resultados.push({\n      ...amb,\n      statusCode: 0,\n      status: 'DOWN',\n      ok: false,\n      error: err.message,\n    });\n  }\n}\n\nconst caidos    = resultados.filter(r => !r.ok);\nconst activos   = resultados.filter(r => r.ok);\nconst fecha     = new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' });\nconst date      = new Date().toISOString().split('T')[0];\nconst hayCaidos = caidos.length > 0;\n\nreturn [{ json: { resultados, caidos, activos, hayCaidos, fecha, date, total: resultados.length } }];"
+      },
+      "id": "b2c3d4e5-0003-4bbb-9999-222222222203",
+      "name": "Ping Ambientes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-001",
+              "leftValue": "={{ $json.hayCaidos }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "b2c3d4e5-0004-4bbb-9999-222222222204",
+      "name": "¿Hay ambientes caídos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item      = $input.first().json;\nconst caidos    = item.caidos    || [];\nconst resultados = item.resultados || [];\nconst fecha     = item.fecha;\nconst date      = item.date;\n\n// ── Jira payload (ADF) ───────────────────────────────────────────────────────\nconst jiraPayload = {\n  fields: {\n    project:   { key: 'KAN' },\n    summary:   `🚨 Ambiente(s) QA caído(s) — ${caidos.map(c => c.nombre).join(', ')} | ${date}`,\n    issuetype: { name: 'Bug' },\n    priority:  { name: 'High' },\n    description: {\n      type: 'doc', version: 1,\n      content: [\n        { type: 'paragraph', content: [{ type: 'text', text: `Health check fallido el ${fecha}. Ambientes con problemas:` }] },\n        {\n          type: 'bulletList',\n          content: caidos.map(c => ({\n            type: 'listItem',\n            content: [{ type: 'paragraph', content: [{ type: 'text', text: `${c.nombre}: ${c.url} — HTTP ${c.statusCode || 'CONNECTION ERROR'}` }] }]\n          }))\n        },\n        { type: 'paragraph', content: [{ type: 'text', text: 'Creado automáticamente por WF-1.5 Health Check QA. No iniciar testing hasta resolver.' }] }\n      ]\n    }\n  }\n};\n\n// ── Email HTML rojo ───────────────────────────────────────────────────────────\nconst rows = resultados.map(r => {\n  const bg     = r.ok ? '#dcfce7' : '#fee2e2';\n  const color  = r.ok ? '#166534' : '#b91c1c';\n  const icon   = r.ok ? '🟢' : '🔴';\n  const estado = r.ok ? `✅ UP (${r.statusCode})` : `❌ DOWN (${r.statusCode || 'ERROR'})`;\n  return `<tr style=\"background:${bg}\">\n    <td style=\"border:1px solid #e5e7eb;padding:10px 14px;font-weight:700\">${icon} ${r.nombre}</td>\n    <td style=\"border:1px solid #e5e7eb;padding:10px 14px;font-size:12px\"><a href=\"${r.url}\" style=\"color:#1d4ed8\">${r.url}</a></td>\n    <td style=\"border:1px solid #e5e7eb;padding:10px 14px;text-align:center;font-weight:700;color:${color}\">${estado}</td>\n  </tr>`;\n}).join('');\n\nconst html = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head>\n<body style=\"margin:0;padding:0;background:#fef2f2;font-family:Arial,sans-serif\">\n<div style=\"max-width:700px;margin:0 auto;padding:24px 16px\">\n  <div style=\"background:linear-gradient(135deg,#b91c1c,#dc2626);color:#fff;padding:20px 24px;border-radius:10px 10px 0 0\">\n    <h2 style=\"margin:0;font-size:18px\">🚨 ALERTA — Ambiente(s) QA Caído(s)</h2>\n    <p style=\"margin:6px 0 0;font-size:13px;opacity:.85\">${fecha} | ${caidos.length} de ${resultados.length} ambiente(s) con problemas</p>\n  </div>\n  <div style=\"background:#fff;border:1px solid #fecaca;border-top:none;padding:24px;border-radius:0 0 10px 10px\">\n    <div style=\"display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px\">\n      <div style=\"background:#fee2e2;border-radius:8px;padding:14px;text-align:center\">\n        <div style=\"font-size:28px;font-weight:700;color:#b91c1c\">${caidos.length}</div>\n        <div style=\"font-size:11px;color:#991b1b;margin-top:4px\">🔴 CAÍDOS</div>\n      </div>\n      <div style=\"background:#dcfce7;border-radius:8px;padding:14px;text-align:center\">\n        <div style=\"font-size:28px;font-weight:700;color:#166534\">${resultados.length - caidos.length}</div>\n        <div style=\"font-size:11px;color:#14532d;margin-top:4px\">🟢 ACTIVOS</div>\n      </div>\n    </div>\n    <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse\">\n      <tr style=\"background:#b91c1c;color:#fff\">\n        <th style=\"padding:9px 14px;border:1px solid #fecaca;text-align:left;font-size:12px\">Ambiente</th>\n        <th style=\"padding:9px 14px;border:1px solid #fecaca;text-align:left;font-size:12px\">URL</th>\n        <th style=\"padding:9px 14px;border:1px solid #fecaca;text-align:center;font-size:12px\">Estado</th>\n      </tr>\n      ${rows}\n    </table>\n    <p style=\"margin-top:16px;font-size:12px;color:#6b7280\">⚠️ Bug creado automáticamente en Jira KAN. No iniciar testing hasta resolver.</p>\n  </div>\n</div></body></html>`;\n\n// ── WhatsApp mensaje alerta ───────────────────────────────────────────────────\nconst waLineas  = resultados.map(r => `${r.ok ? '🟢' : '🔴'} ${r.nombre}: ${r.ok ? 'UP' : 'DOWN'}`).join('\\n');\nconst waMensaje = `🚨 *ALERTA QA — Ambientes Caídos*\\n${fecha}\\n\\n${waLineas}\\n\\n⚠️ ${caidos.length} ambiente(s) fuera de servicio.\\nBug creado en Jira KAN.\\n❌ No iniciar testing hasta resolver.`;\n\nreturn [{\n  json: {\n    ...item,\n    jiraPayload,\n    emailPayload: {\n      to:      'jaimeqv.2609@gmail.com,javi.gajardo26@gmail.com',\n      subject: `🚨 ALERTA QA — ${caidos.length} Ambiente(s) Caído(s) | ${date}`,\n      html\n    },\n    mensajeWhatsApp: encodeURIComponent(waMensaje)\n  }\n}];"
+      },
+      "id": "b2c3d4e5-0005-4bbb-9999-222222222205",
+      "name": "Preparar Alerta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://qaprocess1.atlassian.net/rest/api/3/issue",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.jiraPayload) }}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0006-4bbb-9999-222222222206",
+      "name": "Crear Bug Jira",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1240, 200],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "8EVucD4VZzDrIst3",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3025/send-email",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Preparar Alerta').item.json.emailPayload) }}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0007-4bbb-9999-222222222207",
+      "name": "Gmail Alerta Caídos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 120]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.callmebot.com/whatsapp.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "phone",  "value": "5973473222" },
+            { "name": "text",   "value": "={{ $('Preparar Alerta').item.json.mensajeWhatsApp }}" },
+            { "name": "apikey", "value": "PENDIENTE_APIKEY_JAIME" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "id": "b2c3d4e5-0008-4bbb-9999-222222222208",
+      "name": "WhatsApp Alerta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item       = $input.first().json;\nconst resultados = item.resultados || [];\nconst fecha      = item.fecha;\nconst date       = item.date;\n\n// ── Email HTML verde ──────────────────────────────────────────────────────────\nconst rows = resultados.map(r =>\n  `<tr style=\"background:#dcfce7\">\n    <td style=\"border:1px solid #bbf7d0;padding:10px 14px;font-weight:700\">🟢 ${r.nombre}</td>\n    <td style=\"border:1px solid #bbf7d0;padding:10px 14px;font-size:12px\"><a href=\"${r.url}\" style=\"color:#1d4ed8\">${r.url}</a></td>\n    <td style=\"border:1px solid #bbf7d0;padding:10px 14px;text-align:center;font-weight:700;color:#166534\">✅ UP (${r.statusCode})</td>\n  </tr>`\n).join('');\n\nconst html = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head>\n<body style=\"margin:0;padding:0;background:#f0fdf4;font-family:Arial,sans-serif\">\n<div style=\"max-width:700px;margin:0 auto;padding:24px 16px\">\n  <div style=\"background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;padding:20px 24px;border-radius:10px 10px 0 0\">\n    <h2 style=\"margin:0;font-size:18px\">✅ Todos los Ambientes QA Operativos</h2>\n    <p style=\"margin:6px 0 0;font-size:13px;opacity:.85\">${fecha} | ${resultados.length}/${resultados.length} ambientes activos</p>\n  </div>\n  <div style=\"background:#fff;border:1px solid #bbf7d0;border-top:none;padding:24px;border-radius:0 0 10px 10px\">\n    <div style=\"background:#dcfce7;border-radius:8px;padding:14px;text-align:center;margin-bottom:20px\">\n      <div style=\"font-size:36px;font-weight:700;color:#15803d\">${resultados.length}/${resultados.length}</div>\n      <div style=\"font-size:12px;color:#166534;margin-top:4px\">🟢 TODOS LOS AMBIENTES ACTIVOS</div>\n    </div>\n    <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse\">\n      <tr style=\"background:#15803d;color:#fff\">\n        <th style=\"padding:9px 14px;border:1px solid #bbf7d0;text-align:left;font-size:12px\">Ambiente</th>\n        <th style=\"padding:9px 14px;border:1px solid #bbf7d0;text-align:left;font-size:12px\">URL</th>\n        <th style=\"padding:9px 14px;border:1px solid #bbf7d0;text-align:center;font-size:12px\">Estado</th>\n      </tr>\n      ${rows}\n    </table>\n    <p style=\"margin-top:16px;font-size:12px;color:#6b7280\">✅ Ambiente verificado — puede iniciar la jornada de testing.</p>\n  </div>\n</div></body></html>`;\n\n// ── WhatsApp mensaje OK ───────────────────────────────────────────────────────\nconst waLineas  = resultados.map(r => `🟢 ${r.nombre}: UP (${r.statusCode})`).join('\\n');\nconst waMensaje = `✅ *Ambientes QA — Todo OK*\\n${fecha}\\n\\n${waLineas}\\n\\n🧪 Puede iniciar la jornada de testing sin problemas.`;\n\nreturn [{\n  json: {\n    ...item,\n    emailPayload: {\n      to:      'jaimeqv.2609@gmail.com,javi.gajardo26@gmail.com',\n      subject: `✅ Ambientes QA OK — ${resultados.length}/${resultados.length} activos | ${date}`,\n      html\n    },\n    mensajeWhatsApp: encodeURIComponent(waMensaje)\n  }\n}];"
+      },
+      "id": "b2c3d4e5-0009-4bbb-9999-222222222209",
+      "name": "Preparar OK",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3025/send-email",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.emailPayload) }}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0010-4bbb-9999-222222222210",
+      "name": "Gmail Ambientes OK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1240, 440]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.callmebot.com/whatsapp.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "phone",  "value": "5973473222" },
+            { "name": "text",   "value": "={{ $json.mensajeWhatsApp }}" },
+            { "name": "apikey", "value": "PENDIENTE_APIKEY_JAIME" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "id": "b2c3d4e5-0011-4bbb-9999-222222222211",
+      "name": "WhatsApp OK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1240, 560]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Ping Ambientes", "type": "main", "index": 0 }]]
+    },
+    "Ping Ambientes": {
+      "main": [[{ "node": "¿Hay ambientes caídos?", "type": "main", "index": 0 }]]
+    },
+    "¿Hay ambientes caídos?": {
+      "main": [
+        [{ "node": "Preparar Alerta", "type": "main", "index": 0 }],
+        [{ "node": "Preparar OK",     "type": "main", "index": 0 }]
+      ]
+    },
+    "Preparar Alerta": {
+      "main": [[{ "node": "Crear Bug Jira", "type": "main", "index": 0 }]]
+    },
+    "Crear Bug Jira": {
+      "main": [[
+        { "node": "Gmail Alerta Caídos", "type": "main", "index": 0 },
+        { "node": "WhatsApp Alerta",     "type": "main", "index": 0 }
+      ]]
+    },
+    "Preparar OK": {
+      "main": [[
+        { "node": "Gmail Ambientes OK", "type": "main", "index": 0 },
+        { "node": "WhatsApp OK",        "type": "main", "index": 0 }
+      ]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
