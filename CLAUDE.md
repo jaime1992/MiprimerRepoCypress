@@ -239,3 +239,31 @@ node email-server.js
 | `node email-server.js` | `3025` | Genera Excel/HTML y envía Gmail vía SMTP |
 
 **Regla:** si un nodo de tipo `Enviar Gmail` falla con "refused connection", lo primero es verificar que `email-server.js` esté corriendo en `localhost:3025` antes de revisar credenciales o configuración del nodo.
+
+---
+
+## Workflows n8n — Estado actual
+
+| WF | Nombre | Estado | Repos |
+|---|---|---|---|
+| WF-1.1 | Cypress Regression → Gmail | ✅ Activo | MiprimerRepoCypress |
+| WF-1.2 | Jira Bugs → Excel → Gmail | ✅ Activo | MiprimerRepoCypress |
+| WF-1.3 | Jira Tasks → Gmail + WhatsApp | ✅ Activo | MiprimerRepoCypress |
+| WF-1.4 | Estatus Diarios QA (6pm) | ✅ Activo | MiprimerRepoCypress + n8n_backup |
+| WF-1.5 | Validar Ambientes QA (Health Check) | ✅ Activo | MiprimerRepoCypress + n8n_backup |
+| WF-1.6 | Jira Task/Story → SDD PDF + Teams + Gmail | 🔄 En planificación | — |
+
+### WF-1.6 — Decisiones pendientes antes de construir
+
+1. **Teams webhook URL** — crear Incoming Webhook en el canal Teams:
+   `Canal → ... → Connectors → Incoming Webhook → Configure → copiar URL`
+2. **Deduplicación** — ¿archivo JSON local o JQL `created >= -5m`?
+3. **Switch prioridad** — Critical/High → Gmail + Teams + WhatsApp / Medium/Low → solo Gmail?
+
+### WF-1.6 — Ya confirmado
+
+- SDD generado con las 9 secciones del PDF "Modelo Generico - Metodologia SDD QA"
+- Secciones sin datos de Jira → `[Por completar]`
+- PDF guardado en `C:\QA\Reports\SDD-{KEY}-{titulo}-{fecha}.pdf` via `pdfkit`
+- Sticky note del WF incluirá SDD del propio workflow
+- Skills a usar: `/workflow-n8n-qa`, `/sdd-methodology`, `/n8n-code-javascript`
