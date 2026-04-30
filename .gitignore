@@ -26,7 +26,13 @@ Thumbs.db
 .env
 .env.local
 *.env
+cypress.env.json
 
 # Scripts de administración n8n (no son parte del framework de testing)
 workflows/*.py
 workflows/*.bak
+
+# Prompt Maestro — archivos sensibles
+context/credenciales-*.md
+projects/*/context-privado.md
+references/accesos-*.md

@@ -1,0 +1,77 @@
+{
+  "name": "WF-1.1 — Cypress Regression → Gmail",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cypress-results",
+        "options": {}
+      },
+      "id": "a357fe4a-587e-4323-b20f-7cfd0ce34a1c",
+      "name": "Webhook Cypress",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        208,
+        304
+      ],
+      "webhookId": "b8fbe027-174f-4339-834e-3d41413813ba"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst body    = $input.first().json.body || $input.first().json;\nconst stats   = body.stats   || {};\nconst results = (body.results || []).map(r => ({\n  file:  r.file || r.title || 'spec',\n  stats: r.stats || {},\n  tests: (r.tests || []).map(t => ({\n    title:    t.title    || '',\n    state:    t.state    || '',\n    duration: t.duration || 0,\n    err:      t.err ? String(t.err).substring(0, 150) : null,\n  }))\n}));\n\nreturn [{\n  json: {\n    suite:   body.suite || 'Cypress Suite',\n    stats,\n    results,\n    fecha:   new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' }),\n  }\n}];\n"
+      },
+      "id": "5643d920-ae24-4f4c-ae90-757f35808707",
+      "name": "Procesar Resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3025/run-cypress-report",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "154efdaf-2919-45f3-be5d-f3e3aeb446db",
+      "name": "Enviar Gmail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        768,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Cypress": {
+      "main": [
+        [
+          {
+            "node": "Procesar Resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Resultados": {
+      "main": [
+        [
+          {
+            "node": "Enviar Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

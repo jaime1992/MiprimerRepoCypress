@@ -1,0 +1,145 @@
+{
+  "name": "WF-1.2 — Jira Bugs Abiertos → Excel → Gmail",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "c4f6a99d-9510-473e-b746-58410b8f8615",
+      "name": "Cada día 9am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://qaprocess1.atlassian.net/rest/api/3/search/jql",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "jql",
+              "value": "project = KAN AND issuetype = Bug AND status != Done ORDER BY priority DESC, created DESC"
+            },
+            {
+              "name": "maxResults",
+              "value": "50"
+            },
+            {
+              "name": "fields",
+              "value": "summary,status,priority,assignee,reporter,created,updated,description"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "12762671-cd93-41fb-b908-697e3d087ea7",
+      "name": "Jira: Bugs abiertos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        304
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "8EVucD4VZzDrIst3",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst data   = $input.first().json;\nconst issues = data.issues || [];\nconst today  = new Date().toISOString().split('T')[0];\n\nconst bugs = issues.map(issue => {\n  const f = issue.fields || {};\n  return {\n    key:      issue.key,\n    summary:  (f.summary || '').substring(0, 120),\n    status:   f.status?.name    || 'Open',\n    priority: f.priority?.name  || 'Medium',\n    assignee: f.assignee?.displayName || 'Sin asignar',\n    reporter: f.reporter?.displayName || '',\n    created:  (f.created || '').substring(0, 10),\n    updated:  (f.updated || '').substring(0, 10),\n    url:      `https://qaprocess1.atlassian.net/browse/${issue.key}`,\n  };\n});\n\nreturn [{ json: { bugs, total: data.total || bugs.length, date: today } }];\n"
+      },
+      "id": "2989259e-2374-4593-84da-ceebc087531d",
+      "name": "Procesar Bugs + Excel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3025/run-bugs-report",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "aa521f68-19f6-411b-b86b-db7fdce54a38",
+      "name": "Enviar Gmail Bugs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Workflow permite enviar correo con los errores pendientes en jira",
+        "height": 80
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        496,
+        208
+      ],
+      "id": "a9bbdbd4-df0b-4fc2-bd4e-96a01b5a5c8f",
+      "name": "Sticky Note"
+    }
+  ],
+  "connections": {
+    "Cada día 9am": {
+      "main": [
+        [
+          {
+            "node": "Jira: Bugs abiertos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira: Bugs abiertos": {
+      "main": [
+        [
+          {
+            "node": "Procesar Bugs + Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Bugs + Excel": {
+      "main": [
+        [
+          {
+            "node": "Enviar Gmail Bugs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

@@ -1,33 +1,44 @@
 {
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "name": "1.3 — Sincronizar casos de prueba de Jira a Gmail y WhatsApp",
+  "name": "WF-1.3 - Jira Tasks -> Excel + Gmail + WhatsApp",
   "nodes": [
     {
-      "id": "node-schedule",
+      "id": "74cb9b8f-fbb2-40ae-96db-4148aa60d33d",
       "name": "Cada 2 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300],
+      "position": [
+        160,
+        300
+      ],
       "parameters": {
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 2
+              "field": "cronExpression",
+              "expression": "*/2 * * * *"
             }
           ]
         }
       }
     },
     {
-      "id": "node-jira-search",
+      "id": "f6e717e7-0618-4bdc-bf7b-c05e011cbf63",
       "name": "Jira: Buscar Tasks nuevas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 300],
+      "position": [
+        380,
+        300
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "PENDIENTE_CONFIGURAR",
+          "name": "Jira QA - qaprocess1"
+        }
+      },
       "parameters": {
         "method": "GET",
-        "url": "https://qaprocess1.atlassian.net/rest/api/3/search",
+        "url": "https://qaprocess1.atlassian.net/rest/api/3/search/jql",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "jiraSoftwareCloudApi",
         "sendQuery": true,
@@ -35,7 +46,7 @@
           "parameters": [
             {
               "name": "jql",
-              "value": "project = KAN AND issuetype = Task AND status = \"To Do\" AND created >= \"-3m\" ORDER BY created DESC"
+              "value": "project = KAN AND issuetype = Task AND status = \"To Do\" AND created >= -30m ORDER BY created DESC"
             },
             {
               "name": "maxResults",
@@ -48,30 +59,27 @@
           ]
         },
         "options": {}
-      },
-      "credentials": {
-        "jiraSoftwareCloudApi": {
-          "id": "PENDIENTE_CONFIGURAR",
-          "name": "Jira QA - qaprocess1"
-        }
       }
     },
     {
-      "id": "node-if-resultados",
-      "name": "¿Hay Tasks nuevas?",
+      "id": "c49e7e64-bdf9-41c3-b18e-0ee28fa580cb",
+      "name": "Hay Tasks nuevas?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [680, 300],
+      "position": [
+        600,
+        300
+      ],
       "parameters": {
         "conditions": {
           "options": {
-            "caseSensitive": false,
+            "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "loose"
+            "typeValidation": "strict"
           },
           "conditions": [
             {
-              "id": "cond-total",
+              "id": "0078a94a-a031-452f-940e-f7740d7b4213",
               "leftValue": "={{ $json.total }}",
               "rightValue": 0,
               "operator": {
@@ -85,148 +93,211 @@
       }
     },
     {
-      "id": "node-split-issues",
+      "id": "ae284026-1979-4c16-9970-7c5f58609a27",
       "name": "Split Issues",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300],
+      "position": [
+        820,
+        220
+      ],
       "parameters": {
-        "jsCode": "// Convierte el array de issues en items individuales\n// para que los siguientes nodos procesen uno por uno\nconst issues = $input.first().json.issues || [];\nreturn issues.map(issue => ({ json: issue }));"
+        "jsCode": "\nconst data   = $input.first().json;\nconst issues = data.issues || [];\n\nconst tasks = issues.map(issue => {\n  const f = issue.fields || {};\n  return {\n    key:      issue.key,\n    summary:  (f.summary || '').substring(0, 120),\n    type:     f.issuetype?.name  || 'Task',\n    status:   f.status?.name     || 'To Do',\n    priority: f.priority?.name   || 'Medium',\n    assignee: f.assignee?.displayName || 'Sin asignar',\n    reporter: f.reporter?.displayName || '',\n    created:  (f.created || '').substring(0, 10),\n    url:      'https://qaprocess1.atlassian.net/browse/' + issue.key,\n    description: (() => {\n      const d = f.description;\n      if (!d) return '';\n      if (typeof d === 'string') return d.substring(0, 200);\n      try {\n        return (d.content||[]).flatMap(b=>(b.content||[]).map(c=>c.text||'')).join(' ').substring(0,200);\n      } catch { return ''; }\n    })(),\n  };\n});\n\nconst fecha = new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' });\nconst today = new Date().toISOString().split('T')[0];\n\nreturn [{ json: { tasks, total: tasks.length, fecha, date: today } }];\n",
+        "mode": "runOnceForAllItems"
       }
     },
     {
-      "id": "node-code-preparar",
+      "id": "441bca19-2213-416e-9f5e-b35e5d9fa82f",
       "name": "Preparar Datos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300],
+      "position": [
+        1040,
+        220
+      ],
       "parameters": {
-        "jsCode": "// Datos vienen de Jira Search API: $json.key y $json.fields\nconst data   = $input.first().json;\nconst key    = data.key || 'KAN-?';\nconst fields = data.fields || {};\n\nconst summary = fields.summary || 'Sin título';\n\nconst getDescription = (d) => {\n  if (!d) return 'Sin descripción';\n  if (typeof d === 'string') return d;\n  try {\n    const parts = [];\n    (d.content || []).forEach(b => {\n      if (b.type === 'paragraph') {\n        const t = (b.content || []).map(c => c.text || '').join('');\n        if (t.trim()) parts.push(t);\n      }\n    });\n    return parts.join(' ') || 'Sin descripción';\n  } catch { return 'Sin descripción'; }\n};\n\nconst description = getDescription(fields.description);\nconst priority    = fields.priority?.name          || 'Sin prioridad';\nconst assignee    = fields.assignee?.displayName   || 'Sin asignar';\nconst reporter    = fields.reporter?.displayName   || 'Desconocido';\nconst issueType   = fields.issuetype?.name         || 'Task';\nconst status      = fields.status?.name            || 'To Do';\n\nconst issueUrl   = `https://qaprocess1.atlassian.net/browse/${key}`;\nconst boardUrl   = 'https://qaprocess1.atlassian.net/jira/software/projects/KAN/boards/1';\nconst asignarUrl = `https://qaprocess1.atlassian.net/browse/${key}`;\n\nconst hoy    = DateTime.now().setLocale('es').toFormat(\"dd 'de' MMMM 'de' yyyy\");\nconst asunto = `Nuevo Requerimiento Creado - Revisar con el equipo (${hoy})`;\n\nconst priorityColors = {\n  'Highest': { bg: '#FFEBE6', color: '#BF2600', icon: '🔴' },\n  'High':    { bg: '#FFEBE6', color: '#BF2600', icon: '🔴' },\n  'Medium':  { bg: '#FFFAE6', color: '#974F0C', icon: '🟡' },\n  'Low':     { bg: '#E3FCEF', color: '#006644', icon: '🟢' },\n  'Lowest':  { bg: '#E3FCEF', color: '#006644', icon: '🟢' },\n};\nconst pColor = priorityColors[priority] || { bg: '#F4F5F7', color: '#42526E', icon: '⚪' };\n\nconst mensajeWhatsApp =\n  `🆕 *Nuevo Requerimiento QA — KAN*\\n\\n` +\n  `📋 *[${key}]* ${summary}\\n` +\n  `🔖 Tipo: ${issueType}\\n` +\n  `${pColor.icon} Prioridad: ${priority}\\n` +\n  `👤 Asignado: ${assignee}\\n` +\n  `📝 Reportado por: ${reporter}\\n\\n` +\n  `🔗 Issue: ${issueUrl}\\n` +\n  `📌 Board: ${boardUrl}\\n\\n` +\n  `_Revisar con el equipo — ${hoy}_`;\n\nreturn [{\n  json: {\n    key, summary, description,\n    priority, priorityBg: pColor.bg, priorityColor: pColor.color, priorityIcon: pColor.icon,\n    assignee, reporter, issueType, status,\n    issueUrl, boardUrl, asignarUrl,\n    asunto, hoy, mensajeWhatsApp\n  }\n}];"
+        "jsCode": "\nconst item  = $input.first().json;\nconst tasks = item.tasks || [];\nconst fecha = item.fecha || '';\n\nconst lines = tasks.map(t =>\n  `📋 *${t.key}* — ${t.summary}\\n` +\n  `   Prioridad: ${t.priority} | Asignado: ${t.assignee}\\n` +\n  `   ${t.url}`\n).join('\\n\\n');\n\nconst msg =\n  `🆕 *Nueva Task QA — KAN*\\n` +\n  `Fecha: ${fecha}\\n` +\n  `Total: ${tasks.length} task(s)\\n\\n` +\n  lines;\n\nreturn [{ json: { ...item, mensajeWhatsApp: encodeURIComponent(msg) } }];\n",
+        "mode": "runOnceForAllItems"
       }
     },
     {
-      "id": "node-code-excel",
-      "name": "Generar Excel Adjunto",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1340, 300],
+      "id": "272d3a3f-0c01-44ce-81d3-49608e665a1f",
+      "name": "Generar Excel y Enviar Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1260,
+        220
+      ],
       "parameters": {
-        "jsCode": "const d = $input.first().json;\n\nconst headers = [\n  'Issue ID','Título','Tipo','Prioridad',\n  'Asignado a','Reportado por','Estado',\n  'Descripción','Fecha','Link Jira','Board'\n];\n\nconst row = [\n  d.key, d.summary, d.issueType, d.priority,\n  d.assignee, d.reporter, d.status,\n  d.description, d.hoy, d.issueUrl, d.boardUrl\n];\n\nconst esc = (v) => `\"${String(v || '').replace(/\"/g, '\"\"')}\"`;\n\nconst csvFinal = '\\uFEFF' +\n  headers.map(esc).join(',') + '\\n' +\n  row.map(esc).join(',');\n\nconst fileName = `Requerimiento-${d.key}-${DateTime.now().toFormat('yyyy-MM-dd')}.csv`;\n\nreturn [{\n  json: d,\n  binary: {\n    attachment: {\n      data: Buffer.from(csvFinal, 'utf-8').toString('base64'),\n      mimeType: 'application/vnd.ms-excel',\n      fileName: fileName,\n      fileExtension: 'csv'\n    }\n  }\n}];"
+        "method": "POST",
+        "url": "http://localhost:3025/run-jira-tasks-report",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
       }
     },
     {
-      "id": "node-gmail-send",
-      "name": "Gmail: Enviar Email QA",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
-      "position": [1560, 300],
+      "id": "7ae4911e-ee63-410e-8b54-4f0048c4d46c",
+      "name": "WhatsApp Jaime",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1480,
+        180
+      ],
       "parameters": {
-        "operation": "send",
-        "sendTo": "jaimeqv.2609@gmail.com",
-        "subject": "={{ $json.asunto }}",
-        "emailType": "html",
-        "message": "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>*{box-sizing:border-box}body{margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}.wrap{max-width:620px;margin:0 auto;padding:24px 16px}.header{background:linear-gradient(135deg,#0052CC 0%,#0065FF 100%);color:#fff;padding:24px 28px;border-radius:10px 10px 0 0}.header h1{margin:0;font-size:19px;font-weight:700}.header-sub{font-size:13px;opacity:.8;margin-top:4px}.card{background:#fff;border-radius:0 0 10px 10px;padding:28px;border:1px solid #dfe1e6;border-top:none}.key-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}.key-badge{background:#DEEBFF;color:#0052CC;font-weight:700;font-size:12px;padding:4px 10px;border-radius:4px}.type-badge{background:#f4f5f7;color:#42526E;font-size:12px;padding:4px 10px;border-radius:4px;font-weight:500}.issue-title{font-size:22px;font-weight:700;color:#172B4D;margin:0 0 20px;line-height:1.3}.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;padding:16px;background:#fafbfc;border-radius:8px;border:1px solid #f0f0f0}.meta-label{font-size:10px;color:#6B778C;text-transform:uppercase;font-weight:700;letter-spacing:.8px;margin-bottom:4px}.meta-value{font-size:14px;color:#172B4D;font-weight:500}.priority-badge{display:inline-block;padding:3px 9px;border-radius:3px;font-size:13px;font-weight:600}.divider{border:none;border-top:1px solid #f0f0f0;margin:18px 0}.desc-label{font-size:11px;color:#6B778C;text-transform:uppercase;font-weight:700;letter-spacing:.8px;margin-bottom:8px}.desc-body{background:#f8f9fa;border-left:3px solid #0052CC;border-radius:0 6px 6px 0;padding:14px 16px;font-size:14px;color:#172B4D;line-height:1.6;margin-bottom:20px}.attach-note{background:#E3FCEF;border:1px solid #ABF5D1;border-radius:6px;padding:10px 14px;font-size:13px;color:#006644;margin-bottom:20px}.actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}.btn{display:inline-block;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:600;font-size:14px}.btn-primary{background:#0052CC;color:#fff}.btn-outline{background:#fff;color:#0052CC;border:2px solid #0052CC}.footer{text-align:center;margin-top:18px;font-size:11px;color:#97A0AF;line-height:1.6}</style></head><body><div class=\"wrap\"><div class=\"header\"><h1>🆕 Nuevo Requerimiento Creado</h1><div class=\"header-sub\">Proyecto KAN · {{ $json.hoy }}</div></div><div class=\"card\"><div class=\"key-row\"><span class=\"key-badge\">{{ $json.key }}</span><span class=\"type-badge\">{{ $json.issueType }}</span></div><div class=\"issue-title\">{{ $json.summary }}</div><div class=\"meta-grid\"><div class=\"meta-item\"><div class=\"meta-label\">Prioridad</div><div class=\"meta-value\"><span class=\"priority-badge\" style=\"background:{{ $json.priorityBg }};color:{{ $json.priorityColor }}\">{{ $json.priorityIcon }} {{ $json.priority }}</span></div></div><div class=\"meta-item\"><div class=\"meta-label\">Estado</div><div class=\"meta-value\">📌 {{ $json.status }}</div></div><div class=\"meta-item\"><div class=\"meta-label\">Asignado a</div><div class=\"meta-value\">👤 {{ $json.assignee }}</div></div><div class=\"meta-item\"><div class=\"meta-label\">Reportado por</div><div class=\"meta-value\">✍️ {{ $json.reporter }}</div></div></div><hr class=\"divider\"><div class=\"desc-label\">Descripción</div><div class=\"desc-body\">{{ $json.description }}</div><div class=\"attach-note\">📎 <strong>Adjunto:</strong> Excel con datos completos del requerimiento {{ $json.key }}</div><div class=\"actions\"><a href=\"{{ $json.issueUrl }}\" class=\"btn btn-primary\">🔗 Ver Issue en Jira</a><a href=\"{{ $json.boardUrl }}\" class=\"btn btn-outline\">📌 Ver Board KAN</a><a href=\"{{ $json.asignarUrl }}\" class=\"btn btn-outline\">✋ Asignarme</a></div></div><div class=\"footer\">Generado automáticamente por <strong>Workflow QA n8n · WF-1.3</strong><br>qaprocess1.atlassian.net · {{ $json.hoy }}</div></div></body></html>",
+        "method": "GET",
+        "url": "https://api.callmebot.com/whatsapp.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "5973473222"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Preparar Datos').item.json.mensajeWhatsApp }}"
+            },
+            {
+              "name": "apikey",
+              "value": "PENDIENTE_APIKEY_JAIME"
+            }
+          ]
+        },
         "options": {
-          "attachmentsUi": {
-            "attachmentsBinary": [{}]
-          }
-        }
-      },
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "PENDIENTE_CONFIGURAR",
-          "name": "Gmail QA Account"
+          "timeout": 15000
         }
       }
     },
     {
-      "id": "node-whatsapp-jaime",
-      "name": "WhatsApp → Jaime",
+      "id": "7f33369f-4f50-4a87-ba7d-3a965114e4cd",
+      "name": "WhatsApp Javi",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1780, 220],
+      "position": [
+        1480,
+        300
+      ],
       "parameters": {
         "method": "GET",
         "url": "https://api.callmebot.com/whatsapp.php",
-        "authentication": "none",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "phone",  "value": "5973473222" },
-            { "name": "text",   "value": "={{ $('Preparar Datos').item.json.mensajeWhatsApp }}" },
-            { "name": "apikey", "value": "PENDIENTE_APIKEY_JAIME" }
+            {
+              "name": "phone",
+              "value": "56934228272"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Preparar Datos').item.json.mensajeWhatsApp }}"
+            },
+            {
+              "name": "apikey",
+              "value": "PENDIENTE_APIKEY_JAVI"
+            }
           ]
         },
-        "options": { "timeout": 15000 }
+        "options": {
+          "timeout": 15000
+        }
       }
     },
     {
-      "id": "node-whatsapp-javi",
-      "name": "WhatsApp → Javi",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1780, 380],
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.callmebot.com/whatsapp.php",
-        "authentication": "none",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            { "name": "phone",  "value": "56934228272" },
-            { "name": "text",   "value": "={{ $('Preparar Datos').item.json.mensajeWhatsApp }}" },
-            { "name": "apikey", "value": "PENDIENTE_APIKEY_JAVI" }
-          ]
-        },
-        "options": { "timeout": 15000 }
-      }
-    },
-    {
-      "id": "node-noop-fin",
+      "id": "a1b5a13a-2956-47ab-9f79-c8edc0f2e2cf",
       "name": "Sin Tasks nuevas",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [680, 500],
+      "position": [
+        820,
+        420
+      ],
       "parameters": {}
     }
   ],
   "connections": {
     "Cada 2 minutos": {
-      "main": [[{ "node": "Jira: Buscar Tasks nuevas", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Jira: Buscar Tasks nuevas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Jira: Buscar Tasks nuevas": {
-      "main": [[{ "node": "¿Hay Tasks nuevas?", "type": "main", "index": 0 }]]
-    },
-    "¿Hay Tasks nuevas?": {
       "main": [
-        [{ "node": "Split Issues", "type": "main", "index": 0 }],
-        [{ "node": "Sin Tasks nuevas", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Hay Tasks nuevas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay Tasks nuevas?": {
+      "main": [
+        [
+          {
+            "node": "Split Issues",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sin Tasks nuevas",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Split Issues": {
-      "main": [[{ "node": "Preparar Datos", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Preparar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Preparar Datos": {
-      "main": [[{ "node": "Generar Excel Adjunto", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Generar Excel y Enviar Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Generar Excel Adjunto": {
-      "main": [[{ "node": "Gmail: Enviar Email QA", "type": "main", "index": 0 }]]
-    },
-    "Gmail: Enviar Email QA": {
-      "main": [[
-        { "node": "WhatsApp → Jaime", "type": "main", "index": 0 },
-        { "node": "WhatsApp → Javi",  "type": "main", "index": 0 }
-      ]]
+    "Generar Excel y Enviar Email": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Jaime",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WhatsApp Javi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": {
-    "executionOrder": "v1",
-    "saveManualExecutions": true,
-    "saveExecutionProgress": true
-  },
-  "active": false,
-  "meta": {
-    "templateId": "wf-1.3-qa-jira-gmail-whatsapp-v2",
-    "templateCredsSetupCompleted": false
-  }
+  "settings": {}
 }
