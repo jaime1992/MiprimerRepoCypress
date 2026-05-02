@@ -66,9 +66,9 @@
           "conditions": [
             {
               "id": "skip-check-001",
-              "leftValue": "={{ $json.key }}",
-              "rightValue": "",
-              "operator": { "type": "string", "operation": "isNotEmpty" }
+              "leftValue": "={{ String($json.skip) }}",
+              "rightValue": "false",
+              "operator": { "type": "string", "operation": "equals" }
             }
           ],
           "combinator": "and"
