@@ -1,8 +1,9 @@
-const http       = require('http')
-const nodemailer = require('nodemailer')
-const XLSX       = require('xlsx')
-const fs         = require('fs')
-const path       = require('path')
+const http        = require('http')
+const nodemailer  = require('nodemailer')
+const XLSX        = require('xlsx')
+const fs          = require('fs')
+const path        = require('path')
+const PDFDocument = require('pdfkit')
 
 const PORT       = 3025
 const SMTP_USER  = 'jaimeqv.2609@gmail.com'
@@ -226,7 +227,7 @@ const server = http.createServer(async (req, res) => {
     if (req.url === '/send-email') {
       const { to, subject, html, fileName, fileBase64 } = data
       await transporter.sendMail({ from:SMTP_USER, to, subject, html,
-        attachments: fileBase64 ? [{ filename:fileName||'file.csv', content:Buffer.from(fileBase64,'base64'), contentType:'text/csv' }] : []
+        attachments: fileBase64 ? [{ filename:fileName||'file.pdf', content:Buffer.from(fileBase64,'base64'), contentType:(fileName||'').endsWith('.csv')?'text/csv':'application/pdf' }] : []
       })
       console.log(`[email-server] Enviado: ${subject}`)
       res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({ ok:true }))
@@ -343,6 +344,106 @@ const server = http.createServer(async (req, res) => {
       })
       console.log(`[email-server] Tasks report enviado: ${total} tasks | Excel: ${excelPath}`)
       res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({ ok:true, tasks:total, excelPath }))
+      return
+    }
+
+    // POST /generate-sdd-pdf — genera PDF con las 9 secciones SDD y lo guarda en C:\QA\Reports
+    if (req.url === '/generate-sdd-pdf') {
+      const { key, summary, sdd, priority, issuetype, fecha, date } = data
+
+      const titleSlug = (summary || 'sin-titulo')
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .substring(0, 35).replace(/-$/, '')
+
+      const fileName = `SDD-${key}-${titleSlug}-${date}.pdf`
+      const filePath = path.join(REPORTS_DIR, fileName)
+      if (!fs.existsSync(REPORTS_DIR)) fs.mkdirSync(REPORTS_DIR, { recursive: true })
+
+      const doc    = new PDFDocument({ margin: 50, size: 'A4' })
+      const chunks = []
+      doc.on('data', c => chunks.push(c))
+
+      await new Promise((resolve, reject) => {
+        doc.on('end', resolve)
+        doc.on('error', reject)
+
+        const W     = doc.page.width
+        const BLUE  = '#1e3a5f'
+        const LBLUE = '#dbeafe'
+        const GRAY  = '#6b7280'
+
+        // ── Header azul ───────────────────────────────────────────────────────
+        doc.rect(0, 0, W, 90).fill(BLUE)
+        doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold')
+           .text('SDD — Spec Driven Development', 50, 18)
+        doc.fontSize(11).font('Helvetica')
+           .text('Metodologia para documentacion de casos de prueba | Quality Assurance', 50, 46)
+        doc.fontSize(9)
+           .text('Autor: Jaime Quinelen Villar | QA Strategy Leader | jaimeqv.2609@gmail.com', 50, 68)
+
+        doc.moveDown(3.5)
+
+        // ── Meta info ─────────────────────────────────────────────────────────
+        const my = doc.y
+        doc.rect(50, my, W - 100, 26).fill(LBLUE)
+        doc.fillColor(BLUE).fontSize(10).font('Helvetica-Bold')
+           .text(`Issue: ${key}   |   Tipo: ${issuetype}   |   Prioridad: ${priority}   |   Fecha: ${fecha}`, 56, my + 7)
+        doc.moveDown(1.5)
+
+        // ── Sección helper ────────────────────────────────────────────────────
+        function section(num, title, body) {
+          if (doc.y > 700) doc.addPage()
+          doc.moveDown(0.5)
+          const sy = doc.y
+          doc.rect(50, sy, W - 100, 18).fill(LBLUE)
+          doc.fillColor(BLUE).fontSize(10).font('Helvetica-Bold')
+             .text(`  ${num}. ${title}`, 56, sy + 4)
+          doc.moveDown(0.9)
+          doc.fillColor('#1f2937').fontSize(9.5).font('Helvetica')
+
+          if (Array.isArray(body)) {
+            body.forEach(line => doc.text(`  • ${line}`, { width: W - 110 }))
+          } else if (typeof body === 'object' && body !== null) {
+            Object.entries(body).forEach(([k, v]) => {
+              doc.font('Helvetica-Bold').text(`  ${k.charAt(0).toUpperCase() + k.slice(1)}:`, { width: W - 110 })
+              doc.font('Helvetica')
+              const lines = Array.isArray(v) ? v : [v]
+              lines.forEach(l => doc.text(`    • ${l}`, { width: W - 120 }))
+            })
+          } else {
+            doc.text(`  ${body}`, { width: W - 110 })
+          }
+        }
+
+        section('1', 'Titulo',                                    sdd.titulo)
+        section('2', 'Problema que se quiere resolver',           sdd.problema)
+        section('3', 'Contexto de uso',                           sdd.contexto)
+        section('4', 'Objetivo',                                  sdd.objetivo)
+        section('5', 'Alcance',                                   { Incluye: sdd.alcance.incluye, 'No incluye': sdd.alcance.noIncluye })
+        section('6', 'Comportamiento esperado',                   { 'Flujo principal': sdd.comportamiento.flujo, 'Edge cases': sdd.comportamiento.edgeCases })
+        section('7', 'Criterios de aceptacion (Dado/Cuando/Entonces)', sdd.criterios)
+        section('8', 'Restricciones',                             sdd.restricciones)
+        section('9', 'Notas — Decisiones abiertas',               sdd.notas)
+
+        // ── Footer ────────────────────────────────────────────────────────────
+        if (doc.y > 720) doc.addPage()
+        doc.moveDown(1)
+        const fy = doc.page.height - 40
+        doc.rect(0, fy - 8, W, 48).fill(BLUE)
+        doc.fillColor('#ffffff').fontSize(8)
+           .text(`Metodologia SDD - Quality Assurance | Documento Interno | Generado por WF-1.6 n8n | ${fecha}`, 50, fy, { align: 'center', width: W - 100 })
+
+        doc.end()
+      })
+
+      const buf       = Buffer.concat(chunks)
+      fs.writeFileSync(filePath, buf)
+      const pdfBase64 = buf.toString('base64')
+      console.log(`[email-server] SDD PDF: ${filePath}`)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+         .end(JSON.stringify({ ok: true, filePath, fileName, pdfBase64 }))
       return
     }
 
