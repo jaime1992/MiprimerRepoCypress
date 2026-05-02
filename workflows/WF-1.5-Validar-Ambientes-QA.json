@@ -66,24 +66,24 @@
       "parameters": {
         "method": "POST",
         "url": "https://qaprocess1.atlassian.net/rest/api/3/issue",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpBasicAuth",
+        "authentication": "none",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.jiraPayload) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Basic amFpbWVxdi4yNjA5QGdtYWlsLmNvbTpBVEFUVDN4RmZHRjBOcC1xZWhIekZTaU1vbHItWEV2TndhemRCMVplcnNQVi1FZ2dBSjVYQ2sxZHBzbHI0MEJCZkR4dzdlOGJJVkoxZkFwZGlmaVU1VG1laEIyQXQ1c0lfZGxaZnRyN1NhczlIc2UwYmRUc0RyaElFOW9oOGJYMERqcVdlQ2xyelJ4OGJFM0VocUFEVzZLUGNSMGpTVDV2WE9fRFgwcjMyVkZjd3lKZFhNUjV3Njg9RDI0NkEzOUI=" },
+            { "name": "Content-Type",   "value": "application/json" }
+          ]
+        },
         "options": {}
       },
       "id": "b2c3d4e5-0006-4bbb-9999-222222222206",
       "name": "Crear Bug Jira",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1240, 200],
-      "credentials": {
-        "httpBasicAuth": {
-          "id": "8EVucD4VZzDrIst3",
-          "name": "Unnamed credential"
-        }
-      }
+      "position": [1240, 200]
     },
     {
       "parameters": {

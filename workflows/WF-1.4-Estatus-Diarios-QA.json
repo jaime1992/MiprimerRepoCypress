@@ -21,8 +21,7 @@
     {
       "parameters": {
         "url": "https://qaprocess1.atlassian.net/rest/api/3/search/jql",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpBasicAuth",
+        "authentication": "none",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -40,19 +39,20 @@
             }
           ]
         },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Basic amFpbWVxdi4yNjA5QGdtYWlsLmNvbTpBVEFUVDN4RmZHRjBOcC1xZWhIekZTaU1vbHItWEV2TndhemRCMVplcnNQVi1FZ2dBSjVYQ2sxZHBzbHI0MEJCZkR4dzdlOGJJVkoxZkFwZGlmaVU1VG1laEIyQXQ1c0lfZGxaZnRyN1NhczlIc2UwYmRUc0RyaElFOW9oOGJYMERqcVdlQ2xyelJ4OGJFM0VocUFEVzZLUGNSMGpTVDV2WE9fRFgwcjMyVkZjd3lKZFhNUjV3Njg9RDI0NkEzOUI=" },
+            { "name": "Content-Type",   "value": "application/json" }
+          ]
+        },
         "options": {}
       },
       "id": "a1b2c3d4-0002-4aaa-8888-111111111102",
       "name": "Jira: Tasks + Bugs + Stories",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 300],
-      "credentials": {
-        "httpBasicAuth": {
-          "id": "8EVucD4VZzDrIst3",
-          "name": "Unnamed credential"
-        }
-      }
+      "position": [440, 300]
     },
     {
       "parameters": {
