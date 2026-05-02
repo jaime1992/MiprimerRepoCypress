@@ -54,7 +54,7 @@
         "jsCode": "const data       = $input.first().json;\nconst issues     = data.issues || [];\nconst staticData = $getWorkflowStaticData('global');\nconst processed  = staticData.processedIds || [];\n\nconst nuevos = issues.filter(i => !processed.includes(i.id));\n\nconst allIds = [...new Set([...processed, ...issues.map(i => i.id)])];\nstaticData.processedIds = allIds.slice(-500);\n\nif (nuevos.length === 0) return [];\n\nconst fecha = new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' });\nconst date  = new Date().toISOString().split('T')[0];\n\nreturn nuevos.map(issue => {\n  const f = issue.fields || {};\n  return { json: {\n    key:         issue.key,\n    id:          issue.id,\n    summary:     (f.summary || '').substring(0, 120),\n    description: f.description || null,\n    priority:    f.priority?.name  || 'Medium',\n    assignee:    f.assignee?.displayName || 'Sin asignar',\n    reporter:    f.reporter?.displayName || '',\n    issuetype:   f.issuetype?.name || 'Task',\n    created:     (f.created || '').substring(0, 10),\n    url:         `https://qaprocess1.atlassian.net/browse/${issue.key}`,\n    fecha,\n    date\n  }};\n});"
       },
       "id": "c3d4e5f6-0004-4ccc-aaaa-333333333304",
-      "name": "Deduplicar Issues",
+      "name": "Validación duplicidad Tareas Jira",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1120, 340]
@@ -182,7 +182,7 @@
     "Jira: Tasks y Stories nuevas": {
       "main": [[{ "node": "Deduplicar Issues", "type": "main", "index": 0 }]]
     },
-    "Deduplicar Issues": {
+    "Validación duplicidad Tareas Jira": {
       "main": [[{ "node": "Construir SDD", "type": "main", "index": 0 }]]
     },
     "Construir SDD": {
