@@ -30,17 +30,10 @@
         380,
         300
       ],
-      "credentials": {
-        "jiraSoftwareCloudApi": {
-          "id": "PENDIENTE_CONFIGURAR",
-          "name": "Jira QA - qaprocess1"
-        }
-      },
       "parameters": {
         "method": "GET",
         "url": "https://qaprocess1.atlassian.net/rest/api/3/search/jql",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "authentication": "none",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -56,6 +49,13 @@
               "name": "fields",
               "value": "summary,description,status,issuetype,priority,assignee,reporter,created"
             }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Basic amFpbWVxdi4yNjA5QGdtYWlsLmNvbTpBVEFUVDN4RmZHRjBOcC1xZWhIekZTaU1vbHItWEV2TndhemRCMVplcnNQVi1FZ2dBSjVYQ2sxZHBzbHI0MEJCZkR4dzdlOGJJVkoxZkFwZGlmaVU1VG1laEIyQXQ1c0lfZGxaZnRyN1NhczlIc2UwYmRUc0RyaElFOW9oOGJYMERqcVdlQ2xyelJ4OGJFM0VocUFEVzZLUGNSMGpTVDV2WE9fRFgwcjMyVkZjd3lKZFhNUjV3Njg9RDI0NkEzOUI=" },
+            { "name": "Content-Type",   "value": "application/json" }
           ]
         },
         "options": {}
