@@ -242,6 +242,41 @@ node email-server.js
 
 ---
 
+## Autenticación Jira en n8n — Patrón establecido
+
+> **Problema resuelto:** n8n pierde las credenciales guardadas cuando cambia la `encryptionKey` o se reinstala. Los workflows fallaban con `Credential with ID "xxx" does not exist`.
+
+**Solución implementada en todos los WF:** autenticación via `Authorization` header directo, sin usar el sistema de credenciales de n8n.
+
+### Configuración del nodo HTTP Request → Jira
+
+```
+Authentication: none
+Send Headers: true
+Headers:
+  Authorization: Basic amFpbWVxdi4yNjA5QGdtYWlsLmNvbTpBVEFUVDN4...
+  Content-Type:  application/json
+```
+
+El valor del header es `Basic <base64(email:api_token)>`. Si el API token de Jira cambia, recalcular con:
+```bash
+node -e "console.log(Buffer.from('jaimeqv.2609@gmail.com:NUEVO_TOKEN').toString('base64'))"
+```
+Y actualizar el header en cada nodo Jira de los workflows afectados (WF-1.2, WF-1.3, WF-1.4, WF-1.5, WF-1.6).
+
+### WhatsApp Twilio — mismo patrón
+
+```
+Authentication: none
+Body (form-urlencoded): From, To, Body
+Headers:
+  Authorization: Basic <base64(AccountSID:AuthToken)>
+```
+
+> **Importante:** el mensaje para Twilio NO debe usar `encodeURIComponent()` — Twilio recibe texto plano en el body. CallMeBot SÍ necesita encoding (query string). En n8n usar `decodeURIComponent($json.mensajeWhatsApp)` si el mensaje viene pre-codificado.
+
+---
+
 ## Workflows n8n — Estado actual
 
 | WF | Nombre | Estado | Repos |
