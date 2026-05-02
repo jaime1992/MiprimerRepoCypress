@@ -347,10 +347,11 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    // POST /generate-sdd-pdf — genera PDF con las 9 secciones SDD y lo guarda en C:\QA\Reports
+    // POST /generate-sdd-pdf — genera PDF con diseño SDD (portada + 9 secciones) en C:\QA\Reports
     if (req.url === '/generate-sdd-pdf') {
       const { key, summary, sdd, priority, issuetype, fecha, date } = data
 
+      // Convención: SDD-KAN-123-titulo-resumido-2026-05-02.pdf
       const titleSlug = (summary || 'sin-titulo')
         .toLowerCase()
         .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -361,7 +362,7 @@ const server = http.createServer(async (req, res) => {
       const filePath = path.join(REPORTS_DIR, fileName)
       if (!fs.existsSync(REPORTS_DIR)) fs.mkdirSync(REPORTS_DIR, { recursive: true })
 
-      const doc    = new PDFDocument({ margin: 50, size: 'A4' })
+      const doc    = new PDFDocument({ margin: 0, size: 'A4' })
       const chunks = []
       doc.on('data', c => chunks.push(c))
 
@@ -369,71 +370,143 @@ const server = http.createServer(async (req, res) => {
         doc.on('end', resolve)
         doc.on('error', reject)
 
-        const W     = doc.page.width
-        const BLUE  = '#1e3a5f'
-        const LBLUE = '#dbeafe'
-        const GRAY  = '#6b7280'
+        const W      = doc.page.width   // 595
+        const H      = doc.page.height  // 842
+        const BLUE   = '#1a3a5c'
+        const LBLUE  = '#dbeafe'
+        const LBLUE2 = '#eff6ff'
+        const GRAY   = '#6b7280'
+        const WHITE  = '#ffffff'
 
-        // ── Header azul ───────────────────────────────────────────────────────
-        doc.rect(0, 0, W, 90).fill(BLUE)
-        doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold')
-           .text('SDD — Spec Driven Development', 50, 18)
-        doc.fontSize(11).font('Helvetica')
-           .text('Metodologia para documentacion de casos de prueba | Quality Assurance', 50, 46)
-        doc.fontSize(9)
-           .text('Autor: Jaime Quinelen Villar | QA Strategy Leader | jaimeqv.2609@gmail.com', 50, 68)
+        // ══════════════════════════════════════════════════════════════════════
+        // PÁGINA 1 — PORTADA
+        // ══════════════════════════════════════════════════════════════════════
 
+        // Header azul oscuro
+        doc.rect(0, 0, W, 170).fill(BLUE)
+        doc.fillColor(WHITE).fontSize(10).font('Helvetica')
+           .text('QUALITY ASSURANCE', 0, 28, { align: 'center', width: W })
+        doc.fillColor(WHITE).fontSize(52).font('Helvetica-Bold')
+           .text('SDD', 0, 45, { align: 'center', width: W })
+        doc.fillColor('#90cdf4').fontSize(18).font('Helvetica')
+           .text('Spec Driven Development', 0, 110, { align: 'center', width: W })
+        doc.fillColor('#bfdbfe').fontSize(11).font('Helvetica-Oblique')
+           .text('Metodologia para documentacion de casos de prueba', 0, 140, { align: 'center', width: W })
+
+        // Separador
+        doc.moveDown(9)
+        doc.moveTo(80, doc.y).lineTo(W - 80, doc.y).strokeColor('#bfdbfe').lineWidth(0.8).stroke()
+        doc.moveDown(0.6)
+
+        // Subtítulo
+        doc.fillColor(GRAY).fontSize(10).font('Helvetica-Oblique')
+           .text('Estandar de documentacion  |  Equipos QA', { align: 'center' })
+        doc.moveDown(1.8)
+
+        // Caja autor
+        const ax = 80, aw = W - 160, ay = doc.y
+        doc.rect(ax, ay, aw, 52).fillAndStroke(LBLUE2, '#bfdbfe')
+        doc.fillColor(BLUE).fontSize(11).font('Helvetica-Bold')
+           .text('Autor: Jaime Quinelen Villar  |  QA Strategy Leader', ax, ay + 11, { align: 'center', width: aw })
+        doc.fillColor(GRAY).fontSize(9).font('Helvetica')
+           .text('jaimeqv.2609@gmail.com  |  Santiago, Chile', ax, ay + 30, { align: 'center', width: aw })
         doc.moveDown(3.5)
 
-        // ── Meta info ─────────────────────────────────────────────────────────
-        const my = doc.y
-        doc.rect(50, my, W - 100, 26).fill(LBLUE)
+        // Caja metadata del issue
+        const mx = 80, mw = W - 160, my2 = doc.y
+        doc.rect(mx, my2, mw, 28).fill(LBLUE)
         doc.fillColor(BLUE).fontSize(10).font('Helvetica-Bold')
-           .text(`Issue: ${key}   |   Tipo: ${issuetype}   |   Prioridad: ${priority}   |   Fecha: ${fecha}`, 56, my + 7)
-        doc.moveDown(1.5)
+           .text(`Issue: ${key}   |   Tipo: ${issuetype}   |   Prioridad: ${priority}   |   Fecha: ${date}`, mx, my2 + 8, { align: 'center', width: mw })
+        doc.moveDown(2.8)
 
-        // ── Sección helper ────────────────────────────────────────────────────
+        // 4 cajas de características (2x2)
+        const bw = (W - 200) / 2, bh = 62
+        const bx1 = 80, bx2 = 80 + bw + 20
+        const by1 = doc.y, by2 = by1 + bh + 14
+        const boxes = [
+          { title: 'Estructurado', desc: 'Cada seccion tiene un proposito claro y definido',   x: bx1, y: by1 },
+          { title: 'Trazable',     desc: 'Vincula requerimientos con criterios de aceptacion', x: bx2, y: by1 },
+          { title: 'Verificable',  desc: 'Criterios en formato Dado/Cuando/Entonces',          x: bx1, y: by2 },
+          { title: 'Estandar',     desc: 'Aplicable a todo el equipo QA sin ambiguedades',     x: bx2, y: by2 },
+        ]
+        boxes.forEach(b => {
+          doc.rect(b.x, b.y, bw, bh).fillAndStroke(LBLUE2, '#bfdbfe')
+          doc.fillColor(BLUE).fontSize(10).font('Helvetica-Bold')
+             .text(b.title, b.x + 12, b.y + 12, { width: bw - 24 })
+          doc.fillColor(GRAY).fontSize(9).font('Helvetica')
+             .text(b.desc, b.x + 12, b.y + 30, { width: bw - 24 })
+        })
+
+        // Footer portada
+        doc.rect(0, H - 28, W, 28).fill(BLUE)
+        doc.fillColor(WHITE).fontSize(8).font('Helvetica')
+           .text('Pagina 1 de 2  |  Metodologia SDD - Quality Assurance', 0, H - 16, { align: 'center', width: W })
+
+        // ══════════════════════════════════════════════════════════════════════
+        // PÁGINA 2 — TEMPLATE SDD COMPLETADO
+        // ══════════════════════════════════════════════════════════════════════
+        doc.addPage()
+
+        // Header de página
+        doc.rect(0, 0, W, 26).fill(BLUE)
+        doc.fillColor(WHITE).fontSize(9).font('Helvetica')
+           .text(`SDD - Spec Driven Development  |  ${key}`, 50, 8)
+        doc.fillColor(WHITE).fontSize(9).font('Helvetica')
+           .text('Pag. 2', W - 80, 8)
+
+        doc.y = 46
+        doc.fillColor(BLUE).fontSize(13).font('Helvetica-Bold')
+           .text('TEMPLATE SDD – CASO DE PRUEBA', 50, doc.y)
+        doc.moveDown(0.4)
+        doc.moveTo(50, doc.y).lineTo(W - 50, doc.y).strokeColor('#bfdbfe').lineWidth(0.8).stroke()
+        doc.moveDown(0.6)
+
+        // Helper sección
         function section(num, title, body) {
-          if (doc.y > 700) doc.addPage()
-          doc.moveDown(0.5)
+          if (doc.y > 710) {
+            doc.addPage()
+            doc.rect(0, 0, W, 26).fill(BLUE)
+            doc.fillColor(WHITE).fontSize(9).font('Helvetica')
+               .text(`SDD - Spec Driven Development  |  ${key}`, 50, 8)
+            doc.y = 40
+          }
+          doc.moveDown(0.3)
           const sy = doc.y
-          doc.rect(50, sy, W - 100, 18).fill(LBLUE)
+          doc.rect(50, sy, W - 100, 17).fill(LBLUE)
           doc.fillColor(BLUE).fontSize(10).font('Helvetica-Bold')
              .text(`  ${num}. ${title}`, 56, sy + 4)
-          doc.moveDown(0.9)
+          doc.moveDown(0.85)
           doc.fillColor('#1f2937').fontSize(9.5).font('Helvetica')
 
           if (Array.isArray(body)) {
-            body.forEach(line => doc.text(`  • ${line}`, { width: W - 110 }))
+            body.forEach(line => doc.text(`  • ${line}`, 60, doc.y, { width: W - 120 }))
           } else if (typeof body === 'object' && body !== null) {
             Object.entries(body).forEach(([k, v]) => {
-              doc.font('Helvetica-Bold').text(`  ${k.charAt(0).toUpperCase() + k.slice(1)}:`, { width: W - 110 })
-              doc.font('Helvetica')
+              doc.fillColor(BLUE).font('Helvetica-Bold').fontSize(9)
+                 .text(`  ${k.charAt(0).toUpperCase() + k.slice(1)}:`, 60, doc.y, { width: W - 120 })
+              doc.fillColor('#1f2937').font('Helvetica').fontSize(9.5)
               const lines = Array.isArray(v) ? v : [v]
-              lines.forEach(l => doc.text(`    • ${l}`, { width: W - 120 }))
+              lines.forEach(l => doc.text(`    • ${l}`, 60, doc.y, { width: W - 130 }))
             })
           } else {
-            doc.text(`  ${body}`, { width: W - 110 })
+            doc.text(`  ${body}`, 60, doc.y, { width: W - 120 })
           }
         }
 
-        section('1', 'Titulo',                                    sdd.titulo)
-        section('2', 'Problema que se quiere resolver',           sdd.problema)
-        section('3', 'Contexto de uso',                           sdd.contexto)
-        section('4', 'Objetivo',                                  sdd.objetivo)
-        section('5', 'Alcance',                                   { Incluye: sdd.alcance.incluye, 'No incluye': sdd.alcance.noIncluye })
-        section('6', 'Comportamiento esperado',                   { 'Flujo principal': sdd.comportamiento.flujo, 'Edge cases': sdd.comportamiento.edgeCases })
-        section('7', 'Criterios de aceptacion (Dado/Cuando/Entonces)', sdd.criterios)
-        section('8', 'Restricciones',                             sdd.restricciones)
-        section('9', 'Notas — Decisiones abiertas',               sdd.notas)
+        section('1', 'Titulo',                                         sdd.titulo)
+        section('2', 'Problema que se quiere resolver',                sdd.problema)
+        section('3', 'Contexto de uso',                                sdd.contexto)
+        section('4', 'Objetivo',                                       sdd.objetivo)
+        section('5', 'Alcance',                                        { Incluye: sdd.alcance.incluye, 'No incluye': sdd.alcance.noIncluye })
+        section('6', 'Comportamiento esperado',                        { 'Flujo principal': sdd.comportamiento.flujo, 'Edge cases': sdd.comportamiento.edgeCases })
+        section('7', 'Criterios de aceptacion (Dado / Cuando / Entonces)', sdd.criterios)
+        section('8', 'Restricciones',                                  sdd.restricciones)
+        section('9', 'Notas — Decisiones abiertas y dudas',            sdd.notas)
 
-        // ── Footer ────────────────────────────────────────────────────────────
-        if (doc.y > 720) doc.addPage()
-        doc.moveDown(1)
-        const fy = doc.page.height - 40
-        doc.rect(0, fy - 8, W, 48).fill(BLUE)
-        doc.fillColor('#ffffff').fontSize(8)
-           .text(`Metodologia SDD - Quality Assurance | Documento Interno | Generado por WF-1.6 n8n | ${fecha}`, 50, fy, { align: 'center', width: W - 100 })
+        // Footer última página
+        doc.rect(0, H - 28, W, 28).fill(BLUE)
+        doc.fillColor(WHITE).fontSize(8).font('Helvetica')
+           .text(`Metodologia SDD - Quality Assurance  |  Documento Interno  |  Generado por WF-1.6 n8n  |  ${fecha}`, 0, H - 16, { align: 'center', width: W })
 
         doc.end()
       })
@@ -441,7 +514,7 @@ const server = http.createServer(async (req, res) => {
       const buf       = Buffer.concat(chunks)
       fs.writeFileSync(filePath, buf)
       const pdfBase64 = buf.toString('base64')
-      console.log(`[email-server] SDD PDF: ${filePath}`)
+      console.log(`[email-server] SDD PDF generado: ${filePath}`)
       res.writeHead(200, { 'Content-Type': 'application/json' })
          .end(JSON.stringify({ ok: true, filePath, fileName, pdfBase64 }))
       return
