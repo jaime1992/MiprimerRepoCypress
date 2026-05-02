@@ -86,7 +86,7 @@
       "name": "Sin tareas nuevas en Jira",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1600, 500]
+      "position": [1600, 520]
     },
     {
       "parameters": {
@@ -96,7 +96,7 @@
       "name": "Construir SDD",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1360, 340]
+      "position": [1600, 340]
     },
     {
       "parameters": {
@@ -111,7 +111,7 @@
       "name": "Generar PDF SDD",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1600, 340]
+      "position": [1840, 340]
     },
     {
       "parameters": {
@@ -121,7 +121,7 @@
       "name": "Preparar Email + WA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1840, 340]
+      "position": [2080, 340]
     },
     {
       "parameters": {
@@ -136,7 +136,7 @@
       "name": "Enviar Gmail + PDF",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2080, 220]
+      "position": [2320, 220]
     },
     {
       "parameters": {
@@ -159,7 +159,7 @@
       "name": "WhatsApp Twilio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2080, 440],
+      "position": [2320, 460],
       "credentials": {
         "httpBasicAuth": {
           "id": "PENDIENTE_TWILIO_CREDENTIAL",
